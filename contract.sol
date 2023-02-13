@@ -33,15 +33,20 @@ contract Lottery is ERC721, Pausable, Ownable {
     address public oracle;
     address public usdt;
     uint public NumberOfWinners;
-    uint public individualPrice;
+    uint public pricePool;
+    uint public charity;
+    
+    address public charityAddress;
 
     lotteryStruct public lotterydetails;
 
 
-     mapping(address => uint) public ticketOwner;
+     mapping(uint => address) public ticketOwner;
      mapping(address => bool) public hasPlayed;
      mapping(address => bool) public hasClaimed;
      mapping(address => bool) public isWinner;
+     mapping(address => uint) public totalWins;
+
 
 
 
@@ -52,7 +57,7 @@ contract Lottery is ERC721, Pausable, Ownable {
         require (!lotterydetails.isCompleted, "lottery is over");
         IERC20(usdt).transferFrom(msg.sender, address(this), (ticketPrice*_tickets.length));
         for(uint i = 0;i < _tickets.length; i++) {
-            ticketOwner[msg.sender] = _tickets[i];
+            ticketOwner[_tickets[i]] = msg.sender;
             _safeMint(msg.sender, _tickets[i]);
             emit newTicketPurchased(msg.sender, _tickets[i]);
         }
@@ -63,28 +68,34 @@ contract Lottery is ERC721, Pausable, Ownable {
     }
 
 
-    function setLotteryWinners(address[] memory _winners) public {
+    function setLotteryWinners(uint[] memory _winners) public {
         lotterydetails.isActive = false;
         //called by backend
         require(msg.sender == oracle, "caller not oracle address");
-        address[] memory winners;
         for(uint i = 0; i < NumberOfWinners; i ++) {
-            isWinner[_winners[i]] = true;
-            winners[i] = _winners[i];
-            emit winnerAnnouced (winners[i]);
+            address winner = ticketOwner[_winners[i]];
+            isWinner[winner] = true;
+            totalWins[winner] += getRewards();
+            emit winnerAnnouced (winner);
         }
     }
 
     function claimLottery() public {
         require(isWinner[msg.sender] == true, "caller not winner");
-        require(!hasClaimed[msg.sender], "");
-        IERC20(usdt).transfer(msg.sender, individualPrice);
+        require(!hasClaimed[msg.sender], "caller has claimed");
+        IERC20(usdt).transfer(msg.sender, totalWins[msg.sender]);
         hasClaimed[msg.sender] = true;
     }
 
 
+    function getRewards() public view returns (uint){
+        return pricePool / NumberOfWinners;
+    }
+
     function emitToCharity() public {
-        //send funds to charity
+        require(!lotterydetails.isActive , "lottery not completed");
+        IERC20(usdt).transfer(charityAddress, charity);
+        charity = 0;
     }
 
 
@@ -92,13 +103,15 @@ contract Lottery is ERC721, Pausable, Ownable {
     event newTicketPurchased(address _player, uint _ticketID);
     event winnerAnnouced (address _winner);
 
-    constructor() ERC721("Lottery", "LTR") {
+    constructor(uint _charity, uint _pricePool) ERC721("Lottery", "LTR") {
         lotterydetails.startTime = 1613110721;
         lotterydetails.endTime = 1739341121;
         lotterydetails.isCompleted = false;
         lotterydetails.isActive = true;
+        charity = ((_pricePool * _charity)/100);
+        uint fee = ((_pricePool * 5)/100);
+        pricePool = _pricePool - (charity + fee);
         NumberOfWinners = 5;
-        individualPrice = lotterydetails.price / NumberOfWinners;
         oracle = address(0);
 
     }
