@@ -76,15 +76,17 @@ contract Lottery is ERC721, Pausable, Ownable {
             address winner = ticketOwner[_winners[i]];
             isWinner[winner] = true;
             totalWins[winner] += getRewards();
-            emit winnerAnnouced (winner);
+            emit winnerAnnounced (winner, getRewards());
         }
     }
 
     function claimLottery() public {
         require(isWinner[msg.sender] == true, "caller not winner");
         require(!hasClaimed[msg.sender], "caller has claimed");
-        IERC20(usdt).transfer(msg.sender, totalWins[msg.sender]);
+        uint wins = totalWins[msg.sender];
+        IERC20(usdt).transfer(msg.sender, wins);
         hasClaimed[msg.sender] = true;
+        emit priceWithdrawn(msg.sender, wins);
     }
 
 
@@ -101,7 +103,8 @@ contract Lottery is ERC721, Pausable, Ownable {
 
 
     event newTicketPurchased(address _player, uint _ticketID);
-    event winnerAnnouced (address _winner);
+    event winnerAnnounced (address _winner, uint totalWins);
+    event priceWithdrawn (address _winner, uint price);
 
     constructor(uint _charity, uint _pricePool) ERC721("Lottery", "LTR") {
         lotterydetails.startTime = 1613110721;
